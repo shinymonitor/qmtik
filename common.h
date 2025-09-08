@@ -53,7 +53,7 @@ static inline int load_sample_pair(FILE* file, SamplePair* pair) {
     #define CLAMP_MIN -88.0f
     #define CLAMP_MAX 88.0f
     static inline MainT train_activation(MainT x) {return tanhf(fmaxf(CLAMP_MIN, fminf(CLAMP_MAX, x)));}
-    static inline MainT train_activation_deriv(MainT x) {return 1.0f - train_activation(x) * train_activation(x);}
+    static inline MainT train_activation_deriv(MainT x) {return 1.0f-train_activation(x)*train_activation(x);}
     static inline QActvT infer_activation(MainT x) {return (QActvT)fmaxf(QActvT_MIN, fminf(QActvT_MAX, roundf(train_activation(x)/A_SCALE)));}
 #endif
 //==================================================
