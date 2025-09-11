@@ -427,7 +427,7 @@ static inline void QMTIK_train_step(QMTIK_Network* network, QMTIK_SamplePair sam
             network->adam_state.v_hh_b[l][i]=QMTIK_BETA2*network->adam_state.v_hh_b[l][i]+(1-QMTIK_BETA2)*dB*dB;
             network->hh_layers[l].hh_bias[i]-=QMTIK_ALPHA*(network->adam_state.m_hh_b[l][i]/(1-network->adam_state.b1t))/(sqrtf(network->adam_state.v_hh_b[l][i]/(1-network->adam_state.b2t))+QMTIK_EPS);
             for (size_t j=0; j<QMTIK_H; ++j){
-                QMTIK_MainT dW=network->adam_state.dHH[l][i]*(l==0)?QMTIK_fake_quantize_a(QMTIK_train_activation(network->ih_layer.ih_z[j])):QMTIK_fake_quantize_a(QMTIK_train_activation(network->hh_layers[l-1].hh_z[j]));
+                QMTIK_MainT dW=network->adam_state.dHH[l][i]*((l==0)?QMTIK_fake_quantize_a(QMTIK_train_activation(network->ih_layer.ih_z[j])):QMTIK_fake_quantize_a(QMTIK_train_activation(network->hh_layers[l-1].hh_z[j])));
                 network->adam_state.m_hh_w[l][i][j]=QMTIK_BETA1*network->adam_state.m_hh_w[l][i][j]+(1-QMTIK_BETA1)*dW;
                 network->adam_state.v_hh_w[l][i][j]=QMTIK_BETA2*network->adam_state.v_hh_w[l][i][j]+(1-QMTIK_BETA2)*dW*dW;
                 network->hh_layers[l].hh_wght[i][j]-=QMTIK_ALPHA*(network->adam_state.m_hh_w[l][i][j]/(1-network->adam_state.b1t))/(sqrtf(network->adam_state.v_hh_w[l][i][j]/(1-network->adam_state.b2t))+QMTIK_EPS);
