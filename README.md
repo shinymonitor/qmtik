@@ -25,15 +25,12 @@ It can achieve 4x smallermodel size, 2-4x faster inference, and minimal, if not 
 
 ## Performance
 ### MNIST 784 (784-256-256-10)
-- ~90% on MNIST test set
-- Model size ~300KB (vs ~1200KB for float32)
-- Infer time ~0.5 ms (~8 sec for 14000 inferences) on Intel Core i7-6500U 2.5 GHz
-- Train time ~15 ms per sample (~115 m for 56000 samples for 8 epochs) on Intel Core i7-6500U 2.5 GHz
-- Memory usage only ~400KB during inference and only ~4MB during training
-### Impact
-- 4x smaller model size compared to float32
-- 2-4x faster inference on integer-optimized hardware
-- Minimal accuracy loss (<1% vs full precision on MNIST)
+- Accuracy: ~90%
+- Model size: ~300KB (4x reduction from ~1.2MB for float32)
+- Inference time: ~0.5 ms (~8 sec for 14000 inferences) on Intel Core i7-6500U 2.5 GHz
+- Throughput: ~2000 inferences/second
+- Training time: ~15 ms per sample on Intel Core i7-6500U 2.5 GHz
+- Memory usage: ~400KB inference and ~4MB during training
 
 ## Examples
 The examples/ directory contains models:
