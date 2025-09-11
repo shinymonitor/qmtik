@@ -1,7 +1,8 @@
 # Quantized Model Training and Inference Kit
 
-A minimal, dependency-free implementation of a quantized neural network designed for embedded systems and resource constrained environments. This implementation uses 8-bit integer quantization for both weights and activations, enabling efficient inference on microcontrollers and edge devices. It can achieve 4x smaller
-model size, 2-4x faster inference, and minimal, if not none, accuracy loss.
+A minimal, dependency-free, allocation-agnostic stb-style library for quantized neural networks designed for embedded systems and resource constrained environments. 
+This implementation uses 8-bit integer quantization for both weights and activations, enabling efficient inference on microcontrollers and edge devices.
+It can achieve 4x smallermodel size, 2-4x faster inference, and minimal, if not none, accuracy loss.
 
 ## Features
 - No dependencies
@@ -10,7 +11,7 @@ model size, 2-4x faster inference, and minimal, if not none, accuracy loss.
 - Multiple activation, output processing and cost functions
 - Optimization with momentum and adaptive learning rates
 - Trains with fake quantization to minimize accuracy loss
-- No dynamic memory
+- No dynamic memory (allocation-agnostic)
 - 8-bit quantized weights significantly reduce model size
 - Embedded friendly
 - Adjustable weight and activation scaling factors
@@ -22,25 +23,13 @@ model size, 2-4x faster inference, and minimal, if not none, accuracy loss.
 - Prototyping: Quick experimentation with small neural networks
 - Real-time Applications: Fast inference due to integer-only operations
 
-## Guide
-1. Edit config.h to set your network architecture: 
-- I (input layer size)
-- H (hidden layers size)
-- L (number of hidden layers)
-- O (output layer size)
-- TRAIN_FILE, INFER_FILE, MODEL_FILE
-- activation, post processing, cost functions
-- BATCH_SIZE, ALPHA and EPOCHS
-2. Prepare data samples: The program expects I number of signed bytes for input followed by O number of signed bytes for output (This is by default but is configurable). See mnist_784_data_prep.py for example.
-3. Train model: Compile and run train.c
-4. Run inference: Compile and run infer.c
-
 ## Performance
-### MNIST 784
+### MNIST 784 (784-256-256-10)
 - ~90% on MNIST test set
 - Model size ~300KB (vs ~1200KB for float32)
-- Infer time <1ms on modern CPUs
-- Memory usage ~50KB during inference
+- Infer time ~0.5 ms (~8 sec for 14000 inferences) on Intel Core i7-6500U 2.5 GHz
+- Train time ~15 ms per sample (~115 m for 56000 samples for 8 epochs) on Intel Core i7-6500U 2.5 GHz
+- Memory usage only ~400KB during inference and only ~4MB during training
 ### Impact
 - 4x smaller model size compared to float32
 - 2-4x faster inference on integer-optimized hardware
@@ -53,4 +42,7 @@ The examples/ directory contains models:
 - mnist_784_infer: 14,000 MNIST test samples in binary format
 - mnist_784_model: The trained model
 - mnist_784_data_prep.py: mnist_784 csv to binary format converter
-- config.h: The config for the mnist_784 model
+- qmtik_config.h: The config for the mnist_784 model
+- train.c
+- infer.c
+- Makefile
