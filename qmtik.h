@@ -17,7 +17,6 @@ CONFIGURATION:
     #define QMTIK_A_SCALE 1.0f  // Activation quantization scale
     
     // Optional training parameters
-    #define QMTIK_BATCH_SIZE 32
     #define QMTIK_EPOCHS 10
     #define QMTIK_ALPHA 0.001f
     #define QMTIK_BETA1 0.9f
@@ -60,7 +59,6 @@ Training:
     #define QMTIK_SOFT_MAX_PP
     #define QMTIK_CROSS_ENTROPY_COST
     //=================TRAINING PARAMS=================
-    #define QMTIK_BATCH_SIZE 1
     #define QMTIK_ALPHA 0.001f
     #define QMTIK_EPOCHS 8
     #define QMTIK_BETA1 0.9f
@@ -448,8 +446,7 @@ static inline void QMTIK_train_step(QMTIK_Network* network, QMTIK_SamplePair sam
     }
 }
 void QMTIK_train(QMTIK_Network* network, FILE* train_file){
-    QMTIK_SamplePair batch[QMTIK_BATCH_SIZE];
-    uint8_t load_pair_failed=0;
+    QMTIK_SamplePair sample;
     int _sample_number=0;
     #ifdef QMTIK_TRAIN_DEBUG
         printf("[QMTIK] ====TRAINING BEGIN====\n");
@@ -460,17 +457,14 @@ void QMTIK_train(QMTIK_Network* network, FILE* train_file){
         #endif
         rewind(train_file);
         _sample_number=0;
-        load_pair_failed=0;
         while (1){
+            if (!QMTIK_load_sample_pair(train_file, &sample)) break;
+            _sample_number++;
             #ifdef QMTIK_TRAIN_DEBUG
-                if (_sample_number%(QMTIK_SAMPLE_NUMBER_DEBUG_UPDATE_POINT*QMTIK_BATCH_SIZE)==0) printf("[QMTIK] SAMPLE_NUMBER: %d\n", _sample_number);
+                if (_sample_number%QMTIK_SAMPLE_NUMBER_DEBUG_UPDATE_POINT==0) 
+                    printf("[QMTIK] SAMPLE_NUMBER: %d\n", _sample_number);
             #endif
-            for (size_t i=0; i<QMTIK_BATCH_SIZE; ++i) if (!QMTIK_load_sample_pair(train_file, &batch[i])){load_pair_failed = 1; break;}
-            if (load_pair_failed) break;
-            _sample_number+=QMTIK_BATCH_SIZE;
-            for (size_t i=0; i<QMTIK_BATCH_SIZE; ++i) {
-                QMTIK_train_step(network, batch[i]);
-            }
+            QMTIK_train_step(network, sample);
         }
     }
 }
@@ -550,7 +544,7 @@ QMTIK_MainT QMTIK_test_before_quant(QMTIK_Network* network, FILE* test_file){
         QMTIK_train_forward(network);
         int32_t temp_cost=QMTIK_train_cost(network->o_layer.o_z, pair.output);
         #ifdef QMTIK_TEST_BEFORE_QUANT_DEBUG
-            if (_sample_number%(QMTIK_SAMPLE_NUMBER_DEBUG_UPDATE_POINT*QMTIK_BATCH_SIZE)==0) {
+            if (_sample_number%(QMTIK_SAMPLE_NUMBER_DEBUG_UPDATE_POINT)==0) {
                 printf("[QMTIK] SAMPLE_NUMBER: %d\n", _sample_number);
                 printf("[QMTIK] OUTPUT: ");
                 for(size_t i=0; i<QMTIK_O; ++i) printf("%f,", network->o_layer.o_z[i]);
@@ -578,7 +572,7 @@ QMTIK_MainT QMTIK_test_after_quant(QMTIK_QNetwork* q_network, FILE* test_file){
         QMTIK_infer_forward(q_network);
         int32_t temp_cost=QMTIK_infer_cost(q_network->q_o_layer.q_o_z, pair.output);
         #ifdef QMTIK_TEST_AFTER_QUANT_DEBUG
-            if (_sample_number%(QMTIK_SAMPLE_NUMBER_DEBUG_UPDATE_POINT*QMTIK_BATCH_SIZE)==0) {
+            if (_sample_number%(QMTIK_SAMPLE_NUMBER_DEBUG_UPDATE_POINT)==0) {
                 printf("[QMTIK] SAMPLE_NUMBER: %d\n", _sample_number);
                 printf("[QMTIK] OUTPUT: ");
                 for(size_t i=0; i<QMTIK_O; ++i) printf("%d,", q_network->q_o_layer.q_o_z[i]);
