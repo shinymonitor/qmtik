@@ -43,3 +43,8 @@ The examples/ directory contains models:
 - train.c
 - infer.c
 - Makefile
+
+# Todo
+- LR Decay
+- Batching
+- Conv2D
