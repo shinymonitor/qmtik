@@ -10,6 +10,8 @@ It can achieve 4x smallermodel size, 2-4x faster inference, and minimal, if not 
 - Easy to modify network topology via config.h
 - Multiple activation, output processing and cost functions
 - Optimization with momentum and adaptive learning rates
+- Batching
+- Multiple learning rate decay functions
 - Trains with fake quantization to minimize accuracy loss
 - No dynamic memory (allocation-agnostic)
 - 8-bit quantized weights significantly reduce model size
@@ -25,12 +27,15 @@ It can achieve 4x smallermodel size, 2-4x faster inference, and minimal, if not 
 
 ## Performance
 ### MNIST 784 (784-256-256-10)
-- Accuracy: ~90%
-- Model size: ~300KB (4x reduction from ~1.2MB for float32)
-- Inference time: ~0.5 ms (~8 sec for 14000 inferences) on Intel Core i7-6500U 2.5 GHz
-- Throughput: ~2000 inferences/second
-- Training time: ~15 ms per sample on Intel Core i7-6500U 2.5 GHz
-- Memory usage: ~400KB inference and ~4MB during training
+- ~95% on MNIST test set
+- Model size ~300KB (vs ~1200KB for float32)
+- Infer time ~0.5 ms (~8 sec for 14000 inferences) on Intel Core i7-6500U 2.5 GHz
+- Train time ~12 ms per sample (~90 m for 56000 samples for 8 epochs) on Intel Core i7-6500U 2.5 GHz
+- Memory usage only ~400KB during inference and only ~5MB during training
+### Impact
+- 4x smaller model size compared to float32
+- 2-4x faster inference (tested on x86_64 (Intel Core i7-6500U 2.5 GHz))
+- Minimal accuracy loss (<1% compared to full precision)
 
 ## Examples
 The examples/ directory contains models:
@@ -38,13 +43,8 @@ The examples/ directory contains models:
 - mnist_784_train: 56,000 MNIST train samples in binary format
 - mnist_784_infer: 14,000 MNIST test samples in binary format
 - mnist_784_model: The trained model
-- mnist_784_data_prep.py: mnist_784 csv to binary format converter
+- mnist_784_data_prep.py: mnist_784 csv to binary format converter (refer this for the sample data file format)
 - qmtik_config.h: The config for the mnist_784 model
 - train.c
 - infer.c
 - Makefile
-
-# Todo
-- LR Decay
-- Batching
-- Conv2D

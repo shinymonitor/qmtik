@@ -16,12 +16,23 @@ CONFIGURATION:
     #define QMTIK_W_SCALE 0.01f // Weight quantization scale
     #define QMTIK_A_SCALE 1.0f  // Activation quantization scale
     
-    // Optional training parameters
+    // Training parameters
     #define QMTIK_EPOCHS 10
-    #define QMTIK_ALPHA 0.001f
     #define QMTIK_BETA1 0.9f
     #define QMTIK_BETA2 0.999f
     #define QMTIK_EPS 1e-8f
+    //Batching
+    #define QMTIK_DATASET_SIZE 56000
+    #define QMTIK_BATCH_SIZE 5
+    //LR
+    #define QMTIK_INIT_ALPHA 0.001f
+    // Choose LR Decay function (define one)
+    #define QMTIK_LR_NO_DECAY      // Constant learning rate
+    // #define QMTIK_LR_STEP_DECAY
+    // #define QMTIK_LR_EXPONENTIAL_DECAY  
+    // #define QMTIK_LR_COSINE_DECAY
+    // #define QMTIK_LR_DECAY_RATE 0.95f
+    // #define QMTIK_LR_DECAY_STEPS 1000
     
     // Choose activation function (define one)
     #define QMTIK_RELU_ACTV
@@ -59,11 +70,18 @@ Training:
     #define QMTIK_SOFT_MAX_PP
     #define QMTIK_CROSS_ENTROPY_COST
     //=================TRAINING PARAMS=================
-    #define QMTIK_ALPHA 0.001f
     #define QMTIK_EPOCHS 8
     #define QMTIK_BETA1 0.9f
     #define QMTIK_BETA2 0.999f
     #define QMTIK_EPS 1e-8f
+    //===================BATCHING======================
+    #define QMTIK_DATASET_SIZE 56000
+    #define QMTIK_BATCH_SIZE 5
+    //=================LR DECAY PARAMS=================
+    #define QMTIK_INIT_ALPHA 0.001f
+    #define QMTIK_LR_STEP_DECAY
+    #define QMTIK_LR_DECAY_RATE 0.95f
+    #define QMTIK_LR_DECAY_STEPS 1000
     //=====================DEBUG=======================
     #define QMTIK_EPOCHS_DEBUG_UPDATE_POINT 1
     #define QMTIK_SAMPLE_NUMBER_DEBUG_UPDATE_POINT 1024
@@ -154,11 +172,12 @@ LICENSE:
     SOFTWARE.
 
 VERSION HISTORY:
+    1.1 (2025-09-20) LR Decay, Batching
     1.0 (2025-09-11) Initial release
 */
 
 #pragma once
-#define QMTIK_VERSION "1.0"
+#define QMTIK_VERSION "1.1"
 //==================================================
 #include <stdio.h>
 #include <stdint.h>
@@ -190,6 +209,11 @@ typedef struct {
     QMTIK_MainT m_o_w[QMTIK_O][QMTIK_H], v_o_w[QMTIK_O][QMTIK_H];
     QMTIK_MainT m_o_b[QMTIK_O], v_o_b[QMTIK_O];
     QMTIK_MainT dO[QMTIK_O], dHH[QMTIK_L][QMTIK_H], dIH[QMTIK_H];
+    QMTIK_MainT acc_ih_w[QMTIK_H][QMTIK_I], acc_ih_b[QMTIK_H];
+    QMTIK_MainT acc_hh_w[QMTIK_L][QMTIK_H][QMTIK_H], acc_hh_b[QMTIK_L][QMTIK_H];
+    QMTIK_MainT acc_o_w[QMTIK_O][QMTIK_H], acc_o_b[QMTIK_O];
+    size_t batch_count;
+    QMTIK_MainT current_alpha; size_t step_count;
     size_t t; QMTIK_MainT b1t, b2t;
 } QMTIK_AdamState;
 typedef struct {QMTIK_ILayer i_layer; QMTIK_IHLayer ih_layer; QMTIK_HHLayer hh_layers[QMTIK_L]; QMTIK_OLayer o_layer; QMTIK_AdamState adam_state;} QMTIK_Network;
@@ -230,6 +254,7 @@ static inline void QMTIK_train_post_process(QMTIK_MainT z[QMTIK_O]);
 static inline void QMTIK_infer_post_process(QMTIK_QActvT z[QMTIK_O]);
 static inline QMTIK_MainT QMTIK_train_cost(QMTIK_MainT output[QMTIK_O], QMTIK_QActvT expected[QMTIK_O]);
 static inline QMTIK_MainT QMTIK_infer_cost(QMTIK_QActvT output[QMTIK_O], QMTIK_QActvT expected[QMTIK_O]);
+static inline void QMTIK_update_alpha(QMTIK_MainT* current_alpha, size_t* step_count);
 //==================================================
 static inline QMTIK_QWghtT QMTIK_quantize_w(QMTIK_MainT x);
 static inline QMTIK_MainT QMTIK_fake_quantize_w(QMTIK_MainT x);
@@ -238,7 +263,8 @@ static inline QMTIK_MainT QMTIK_fake_quantize_a(QMTIK_MainT x);
 //==================================================
 static inline uint8_t QMTIK_load_sample_pair(FILE* file, QMTIK_SamplePair* pair);
 static inline void QMTIK_train_forward(QMTIK_Network* network);
-static inline void QMTIK_train_step(QMTIK_Network* network, QMTIK_SamplePair sample_pair);
+static inline void QMTIK_batch_accumulate_gradients(QMTIK_Network* network, QMTIK_SamplePair sample_pair);
+static inline void QMTIK_batch_apply_gradients(QMTIK_Network* network);
 //==================================================
 #ifdef QMTIK_IMPLEMENTATION
 //==================================================
@@ -318,6 +344,33 @@ static inline void QMTIK_train_step(QMTIK_Network* network, QMTIK_SamplePair sam
     }
 #endif
 //==================================================
+#ifdef QMTIK_LR_NO_DECAY
+static inline void QMTIK_update_alpha(QMTIK_MainT* current_alpha, size_t* step_count) {
+    *current_alpha=QMTIK_INIT_ALPHA;
+    *step_count+=1;
+}
+#endif
+#ifdef QMTIK_LR_STEP_DECAY
+static inline void QMTIK_update_alpha(QMTIK_MainT* current_alpha, size_t* step_count) {
+    *step_count+=1;
+    if (*step_count%QMTIK_LR_DECAY_STEPS==0) *current_alpha*=QMTIK_LR_DECAY_RATE;
+}
+#endif
+#ifdef QMTIK_LR_EXPONENTIAL_DECAY
+static inline void QMTIK_update_alpha(QMTIK_MainT* current_alpha, size_t* step_count) {
+    *step_count+=1;
+    *current_alpha=QMTIK_INIT_ALPHA*powf(QMTIK_LR_DECAY_RATE, (QMTIK_MainT)(*step_count)/QMTIK_LR_DECAY_STEPS);
+}
+#endif
+#ifdef QMTIK_LR_COSINE_DECAY
+static inline void QMTIK_update_alpha(QMTIK_MainT* current_alpha, size_t* step_count) {
+    *step_count+=1;
+    size_t total_steps=QMTIK_EPOCHS*(QMTIK_DATASET_SIZE/QMTIK_BATCH_SIZE);
+    QMTIK_MainT progress=fminf(1.0f, (QMTIK_MainT)(*step_count)/total_steps);
+    *current_alpha=QMTIK_INIT_ALPHA*(1.0f+cosf(3.14159f*progress))/2.0f;
+}
+#endif
+//==================================================
 static inline uint8_t QMTIK_load_sample_pair(FILE* file, QMTIK_SamplePair* pair) {
     size_t r1=fread(pair->input, 1, QMTIK_I, file);
     size_t r2=fread(pair->output, 1, QMTIK_O, file);
@@ -382,13 +435,10 @@ void QMTIK_infer_forward(QMTIK_QNetwork* q_network) {
     QMTIK_infer_post_process(q_network->q_o_layer.q_o_z);
 }
 //==================================================
-static inline void QMTIK_train_step(QMTIK_Network* network, QMTIK_SamplePair sample_pair) {
-    ++network->adam_state.t;
-    network->adam_state.b1t*=QMTIK_BETA1;
-    network->adam_state.b2t*=QMTIK_BETA2;
-    for (size_t i=0; i<QMTIK_I; ++i) network->i_layer.i_actv[i]=sample_pair.input[i];
+static inline void QMTIK_batch_accumulate_gradients(QMTIK_Network* network, QMTIK_SamplePair sample_pair) {
+    for(size_t i=0; i<QMTIK_I; ++i) network->i_layer.i_actv[i]=sample_pair.input[i];
     QMTIK_train_forward(network);
-    for (size_t i=0; i<QMTIK_O; i++) network->adam_state.dO[i]=network->o_layer.o_z[i]-(QMTIK_MainT)sample_pair.output[i];
+    for (size_t i=0; i<QMTIK_O; ++i) network->adam_state.dO[i]=network->o_layer.o_z[i]-(QMTIK_MainT)sample_pair.output[i];
     for (size_t i=0; i<QMTIK_H; ++i){
         QMTIK_MainT sum=0;
         for (size_t j=0; j<QMTIK_O; ++j) sum+=QMTIK_fake_quantize_w(network->o_layer.o_wght[j][i])*network->adam_state.dO[j];
@@ -407,46 +457,81 @@ static inline void QMTIK_train_step(QMTIK_Network* network, QMTIK_SamplePair sam
         network->adam_state.dIH[i]=sum*QMTIK_train_activation_deriv(network->ih_layer.ih_z[i]);
     }
     for (size_t i=0; i<QMTIK_H; ++i){
-        QMTIK_MainT dB=network->adam_state.dIH[i];
-        network->adam_state.m_ih_b[i]=QMTIK_BETA1*network->adam_state.m_ih_b[i]+(1-QMTIK_BETA1)*dB;
-        network->adam_state.v_ih_b[i]=QMTIK_BETA2*network->adam_state.v_ih_b[i]+(1-QMTIK_BETA2)*dB*dB;
-        network->ih_layer.ih_bias[i]-=QMTIK_ALPHA*(network->adam_state.m_ih_b[i]/(1-network->adam_state.b1t))/(sqrtf(network->adam_state.v_ih_b[i]/(1-network->adam_state.b2t))+QMTIK_EPS);
-        for (size_t j=0; j<QMTIK_I; ++j){
-            QMTIK_MainT dW=network->adam_state.dIH[i]*QMTIK_fake_quantize_a(network->i_layer.i_actv[j]);
-            network->adam_state.m_ih_w[i][j]=QMTIK_BETA1*network->adam_state.m_ih_w[i][j]+(1-QMTIK_BETA1)*dW;
-            network->adam_state.v_ih_w[i][j]=QMTIK_BETA2*network->adam_state.v_ih_w[i][j]+(1-QMTIK_BETA2)*dW*dW;
-            network->ih_layer.ih_wght[i][j]-=QMTIK_ALPHA*(network->adam_state.m_ih_w[i][j]/(1-network->adam_state.b1t))/(sqrtf(network->adam_state.v_ih_w[i][j]/(1-network->adam_state.b2t))+QMTIK_EPS);
-        }
+        network->adam_state.acc_ih_b[i]+=network->adam_state.dIH[i];
+        for (size_t j=0; j<QMTIK_I; ++j) network->adam_state.acc_ih_w[i][j]+=network->adam_state.dIH[i] * QMTIK_fake_quantize_a(network->i_layer.i_actv[j]);
     }
     for (size_t l=0; l<QMTIK_L; ++l){
         for (size_t i=0; i<QMTIK_H; ++i){
-            QMTIK_MainT dB=network->adam_state.dHH[l][i];
-            network->adam_state.m_hh_b[l][i]=QMTIK_BETA1*network->adam_state.m_hh_b[l][i]+ (1-QMTIK_BETA1)*dB;
-            network->adam_state.v_hh_b[l][i]=QMTIK_BETA2*network->adam_state.v_hh_b[l][i]+(1-QMTIK_BETA2)*dB*dB;
-            network->hh_layers[l].hh_bias[i]-=QMTIK_ALPHA*(network->adam_state.m_hh_b[l][i]/(1-network->adam_state.b1t))/(sqrtf(network->adam_state.v_hh_b[l][i]/(1-network->adam_state.b2t))+QMTIK_EPS);
+            network->adam_state.acc_hh_b[l][i]+=network->adam_state.dHH[l][i];
             for (size_t j=0; j<QMTIK_H; ++j){
-                QMTIK_MainT dW=network->adam_state.dHH[l][i]*((l==0)?QMTIK_fake_quantize_a(QMTIK_train_activation(network->ih_layer.ih_z[j])):QMTIK_fake_quantize_a(QMTIK_train_activation(network->hh_layers[l-1].hh_z[j])));
-                network->adam_state.m_hh_w[l][i][j]=QMTIK_BETA1*network->adam_state.m_hh_w[l][i][j]+(1-QMTIK_BETA1)*dW;
-                network->adam_state.v_hh_w[l][i][j]=QMTIK_BETA2*network->adam_state.v_hh_w[l][i][j]+(1-QMTIK_BETA2)*dW*dW;
-                network->hh_layers[l].hh_wght[i][j]-=QMTIK_ALPHA*(network->adam_state.m_hh_w[l][i][j]/(1-network->adam_state.b1t))/(sqrtf(network->adam_state.v_hh_w[l][i][j]/(1-network->adam_state.b2t))+QMTIK_EPS);
+                QMTIK_MainT prev_actv=(l==0)?QMTIK_fake_quantize_a(QMTIK_train_activation(network->ih_layer.ih_z[j])):QMTIK_fake_quantize_a(QMTIK_train_activation(network->hh_layers[l-1].hh_z[j]));
+                network->adam_state.acc_hh_w[l][i][j]+=network->adam_state.dHH[l][i]*prev_actv;
             }
         }
     }
     for (size_t i=0; i<QMTIK_O; ++i){
-        QMTIK_MainT dB=network->adam_state.dO[i];
-        network->adam_state.m_o_b[i]=QMTIK_BETA1*network->adam_state.m_o_b[i]+(1-QMTIK_BETA1)*dB;
-        network->adam_state.v_o_b[i]=QMTIK_BETA2*network->adam_state.v_o_b[i]+(1-QMTIK_BETA2)*dB*dB;
-        network->o_layer.o_bias[i]-=QMTIK_ALPHA*(network->adam_state.m_o_b[i]/(1-network->adam_state.b1t))/(sqrtf(network->adam_state.v_o_b[i]/(1-network->adam_state.b2t))+QMTIK_EPS);
-        for (size_t j=0; j<QMTIK_H; ++j){
-            QMTIK_MainT dW=network->adam_state.dO[i]*QMTIK_fake_quantize_a(QMTIK_train_activation(network->hh_layers[QMTIK_L-1].hh_z[j]));
-            network->adam_state.m_o_w[i][j]=QMTIK_BETA1*network->adam_state.m_o_w[i][j]+(1-QMTIK_BETA1)*dW;
-            network->adam_state.v_o_w[i][j]=QMTIK_BETA2*network->adam_state.v_o_w[i][j]+(1-QMTIK_BETA2)*dW*dW;
-            network->o_layer.o_wght[i][j]-=QMTIK_ALPHA*(network->adam_state.m_o_w[i][j]/(1-network->adam_state.b1t))/(sqrtf(network->adam_state.v_o_w[i][j]/(1-network->adam_state.b2t))+QMTIK_EPS);
+        network->adam_state.acc_o_b[i]+=network->adam_state.dO[i];
+        for (size_t j=0; j<QMTIK_H; ++j) network->adam_state.acc_o_w[i][j]+=network->adam_state.dO[i]*QMTIK_fake_quantize_a(QMTIK_train_activation(network->hh_layers[QMTIK_L-1].hh_z[j]));
+    }
+    network->adam_state.batch_count++;
+}
+
+static inline void QMTIK_batch_apply_gradients(QMTIK_Network* network) {
+    QMTIK_update_alpha(&network->adam_state.current_alpha, &network->adam_state.step_count);
+    ++network->adam_state.t;
+    network->adam_state.b1t*=QMTIK_BETA1;
+    network->adam_state.b2t*=QMTIK_BETA2;
+    if (network->adam_state.batch_count==0) return;
+    for (size_t i=0; i<QMTIK_H; ++i){
+        QMTIK_MainT avg_dB = network->adam_state.acc_ih_b[i]/network->adam_state.batch_count;
+        network->adam_state.m_ih_b[i]=QMTIK_BETA1*network->adam_state.m_ih_b[i]+(1-QMTIK_BETA1)*avg_dB;
+        network->adam_state.v_ih_b[i]=QMTIK_BETA2*network->adam_state.v_ih_b[i]+(1-QMTIK_BETA2)*avg_dB*avg_dB;
+        network->ih_layer.ih_bias[i]-=(network->adam_state.current_alpha)*(network->adam_state.m_ih_b[i]/(1-network->adam_state.b1t))/(sqrtf(network->adam_state.v_ih_b[i]/(1-network->adam_state.b2t))+QMTIK_EPS);
+        for (size_t j=0; j<QMTIK_I; ++j){
+            QMTIK_MainT avg_dW = network->adam_state.acc_ih_w[i][j]/network->adam_state.batch_count;
+            network->adam_state.m_ih_w[i][j]=QMTIK_BETA1*network->adam_state.m_ih_w[i][j] + (1-QMTIK_BETA1)*avg_dW;
+            network->adam_state.v_ih_w[i][j]=QMTIK_BETA2*network->adam_state.v_ih_w[i][j] + (1-QMTIK_BETA2)*avg_dW*avg_dW;
+            network->ih_layer.ih_wght[i][j]-=(network->adam_state.current_alpha)*(network->adam_state.m_ih_w[i][j]/(1-network->adam_state.b1t))/(sqrtf(network->adam_state.v_ih_w[i][j]/(1-network->adam_state.b2t))+QMTIK_EPS);
         }
     }
+    for (size_t l=0; l<QMTIK_L; ++l){
+        for (size_t i=0; i<QMTIK_H; ++i){
+            QMTIK_MainT avg_dB = network->adam_state.acc_hh_b[l][i]/network->adam_state.batch_count;
+            network->adam_state.m_hh_b[l][i]=QMTIK_BETA1*network->adam_state.m_hh_b[l][i] + (1-QMTIK_BETA1)*avg_dB;
+            network->adam_state.v_hh_b[l][i] = QMTIK_BETA2*network->adam_state.v_hh_b[l][i] + (1-QMTIK_BETA2)*avg_dB*avg_dB;
+            network->hh_layers[l].hh_bias[i] -= (network->adam_state.current_alpha)*(network->adam_state.m_hh_b[l][i]/(1-network->adam_state.b1t))/(sqrtf(network->adam_state.v_hh_b[l][i]/(1-network->adam_state.b2t))+QMTIK_EPS);
+            for (size_t j=0; j<QMTIK_H; ++j){
+                QMTIK_MainT avg_dW = network->adam_state.acc_hh_w[l][i][j]/network->adam_state.batch_count;
+                network->adam_state.m_hh_w[l][i][j] = QMTIK_BETA1*network->adam_state.m_hh_w[l][i][j] + (1-QMTIK_BETA1)*avg_dW;
+                network->adam_state.v_hh_w[l][i][j] = QMTIK_BETA2*network->adam_state.v_hh_w[l][i][j] + (1-QMTIK_BETA2)*avg_dW*avg_dW;
+                network->hh_layers[l].hh_wght[i][j] -= (network->adam_state.current_alpha)*(network->adam_state.m_hh_w[l][i][j]/(1-network->adam_state.b1t))/(sqrtf(network->adam_state.v_hh_w[l][i][j]/(1-network->adam_state.b2t))+QMTIK_EPS);
+            }
+        }
+    }
+    for (size_t i=0; i<QMTIK_O; ++i){
+        QMTIK_MainT avg_dB = network->adam_state.acc_o_b[i]/network->adam_state.batch_count;
+        network->adam_state.m_o_b[i] = QMTIK_BETA1*network->adam_state.m_o_b[i] + (1-QMTIK_BETA1)*avg_dB;
+        network->adam_state.v_o_b[i] = QMTIK_BETA2*network->adam_state.v_o_b[i] + (1-QMTIK_BETA2)*avg_dB*avg_dB;
+        network->o_layer.o_bias[i] -= (network->adam_state.current_alpha)*(network->adam_state.m_o_b[i]/(1-network->adam_state.b1t))/(sqrtf(network->adam_state.v_o_b[i]/(1-network->adam_state.b2t))+QMTIK_EPS);
+        for (size_t j=0; j<QMTIK_H; ++j){
+            QMTIK_MainT avg_dW = network->adam_state.acc_o_w[i][j]/network->adam_state.batch_count;
+            network->adam_state.m_o_w[i][j] = QMTIK_BETA1*network->adam_state.m_o_w[i][j] + (1-QMTIK_BETA1)*avg_dW;
+            network->adam_state.v_o_w[i][j] = QMTIK_BETA2*network->adam_state.v_o_w[i][j] + (1-QMTIK_BETA2)*avg_dW*avg_dW;
+            network->o_layer.o_wght[i][j] -= (network->adam_state.current_alpha)*(network->adam_state.m_o_w[i][j]/(1-network->adam_state.b1t))/(sqrtf(network->adam_state.v_o_w[i][j]/(1-network->adam_state.b2t))+QMTIK_EPS);
+        }
+    }
+    memset(network->adam_state.acc_ih_w, 0, sizeof(network->adam_state.acc_ih_w));
+    memset(network->adam_state.acc_ih_b, 0, sizeof(network->adam_state.acc_ih_b));
+    memset(network->adam_state.acc_hh_w, 0, sizeof(network->adam_state.acc_hh_w));
+    memset(network->adam_state.acc_hh_b, 0, sizeof(network->adam_state.acc_hh_b));
+    memset(network->adam_state.acc_o_w, 0, sizeof(network->adam_state.acc_o_w));
+    memset(network->adam_state.acc_o_b, 0, sizeof(network->adam_state.acc_o_b));
+    network->adam_state.batch_count = 0;
 }
+
 void QMTIK_train(QMTIK_Network* network, FILE* train_file){
     QMTIK_SamplePair sample;
+    uint8_t load_pair_failed=0;
     int _sample_number=0;
     #ifdef QMTIK_TRAIN_DEBUG
         printf("[QMTIK] ====TRAINING BEGIN====\n");
@@ -457,16 +542,28 @@ void QMTIK_train(QMTIK_Network* network, FILE* train_file){
         #endif
         rewind(train_file);
         _sample_number=0;
+        load_pair_failed=0;
         while (1){
-            if (!QMTIK_load_sample_pair(train_file, &sample)) break;
-            _sample_number++;
             #ifdef QMTIK_TRAIN_DEBUG
-                if (_sample_number%QMTIK_SAMPLE_NUMBER_DEBUG_UPDATE_POINT==0) 
+                if (_sample_number%(QMTIK_SAMPLE_NUMBER_DEBUG_UPDATE_POINT)==0) 
                     printf("[QMTIK] SAMPLE_NUMBER: %d\n", _sample_number);
             #endif
-            QMTIK_train_step(network, sample);
+            for (size_t i=0; i<QMTIK_BATCH_SIZE; ++i) {
+                if (!QMTIK_load_sample_pair(train_file, &sample)){load_pair_failed=1; break;}
+                QMTIK_batch_accumulate_gradients(network, sample);
+                _sample_number++;
+            }
+            if (load_pair_failed) {
+                if (network->adam_state.batch_count>0) QMTIK_batch_apply_gradients(network);
+                break;
+            }
+            QMTIK_batch_apply_gradients(network);
         }
     }
+    #ifdef QMTIK_TRAIN_DEBUG
+        printf("[QMTIK] ====TRAINING COMPLETE====\n");
+        printf("[QMTIK] Total samples processed: %d\n", _sample_number);
+    #endif
 }
 //==================================================
 void QMTIK_quantize_to_model(QMTIK_Network* network, QMTIK_Model* model){
@@ -523,8 +620,9 @@ void QMTIK_init_weights(QMTIK_Network* network){
         for (size_t j=0; j<QMTIK_H; ++j) network->o_layer.o_wght[i][j]=sqrtf(2.0f/(QMTIK_H+QMTIK_O))*((QMTIK_MainT)rand()/RAND_MAX-0.5f)*2.0f;
     }
     memset(&network->adam_state, 0, sizeof(QMTIK_AdamState));
-    network->adam_state.b1t = 1.0f;
-    network->adam_state.b2t = 1.0f;
+    network->adam_state.current_alpha=QMTIK_INIT_ALPHA;
+    network->adam_state.b1t=1.0f;
+    network->adam_state.b2t=1.0f;
 }
 //==================================================
 void QMTIK_load_network_input(QMTIK_QNetwork* q_network, QMTIK_QActvT input[QMTIK_I]) {for(size_t i=0; i<QMTIK_I; ++i) q_network->q_i_layer.q_i_actv[i]=input[i];}
