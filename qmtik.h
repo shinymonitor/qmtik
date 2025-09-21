@@ -172,12 +172,12 @@ LICENSE:
     SOFTWARE.
 
 VERSION HISTORY:
-    1.1 (2025-09-20) LR Decay, Batching
+    2.0 (2025-09-20) LR Decay, Batching
     1.0 (2025-09-11) Initial release
 */
 
 #pragma once
-#define QMTIK_VERSION "1.1"
+#define QMTIK_VERSION "2.0"
 //==================================================
 #include <stdio.h>
 #include <stdint.h>
@@ -689,4 +689,5 @@ size_t QMTIK_get_network_memory_usage(void) {return sizeof(QMTIK_Network);}
 size_t QMTIK_get_model_memory_usage(void) {return sizeof(QMTIK_Model);}
 size_t QMTIK_get_inference_memory_usage(void) {return sizeof(QMTIK_QNetwork);}
 //==================================================
+
 #endif
