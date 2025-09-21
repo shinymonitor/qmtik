@@ -1,5 +1,9 @@
 # Quantized Model Training and Inference Kit
 
+<p align="center">
+    <img src="assets/LOGO.png", width="200">
+</p>
+
 A minimal, dependency-free, allocation-agnostic stb-style library for quantized neural networks designed for embedded systems and resource constrained environments. 
 It uses uint8_t quantization for weights and activations to achieve 4x smaller model size, 2-4x faster inference, and minimal, if not none, accuracy loss.
 
