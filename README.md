@@ -26,7 +26,18 @@ On the MNIST 784 dataset, QMTIK achieves ~95% test accuracy with a model that is
 - Prototyping: Quick experimentation with small neural networks
 - Real-time Applications: Fast inference due to integer-only operations
 
-## Performance [Benchmarked on an Intel Core i7-6500U @ 2.5 GHz]
+## Performance
+QMTIK provides significant performance gains with minimal-to-zero accuracy loss. All benchmarks were run on an Intel Core i7-6500U @ 2.5 GHz.
+
+|Dataset|Task|Accuracy|Model Size (FP32 -> INT8)|Inference Speedup|
+|-------|----|--------|----------------|-----------------|
+|MNIST|Digit Recognition|~95%|1.2 MB -> 327 KB **(4x smaller)**|**~14x faster**|
+|Fashion-MNIST|Image Classification|~86%|1.2 MB -> 327 KB **(4x smaller)**|**~15x faster**|
+|Iris|Data Classification|~95%|9 KB -> 2 KB **(4x smaller)**|**~25x faster**|
+
+<details>
+<summary>Click for Detailed Benchmark Logs</summary>
+
 ### MNIST 784 (784-256-256-10) {Digit Recognition}
 ![MNIST 784 PERFORMANCE REPORT](/assets/MNIST_784_PERFORMANCE_REPORT.png)
 
@@ -35,6 +46,7 @@ On the MNIST 784 dataset, QMTIK achieves ~95% test accuracy with a model that is
 
 ### IRIS (4-16*8-3) {Data Classification}
 ![IRIS PERFORMANCE REPORT](/assets/IRIS_PERFORMANCE_REPORT.png)
+</details>
 
 **You can probably get even better accuracy with better hyperparameters like more epochs and correct LR decay**
 
@@ -49,5 +61,3 @@ The examples/ directory contains demos each with:
 - train.c
 - infer.c
 - Makefile
-
-
