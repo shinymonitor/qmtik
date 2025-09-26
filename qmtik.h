@@ -1,5 +1,18 @@
 /*
-QMTIK - Quantized Model Training and Inference Kit
+              ___________    
+            _/  ____     \   
+           | |_/    °__/° \  
+          /  _/  /° / ___  | 
+         | -/  _|__/\/_  ° | 
+         | |  / \____  °  /  
+          \__/\______°___/   
+                   |___|     
+                     \ \     
+                      \_\    
+
+                QMTIK
+
+Quantized Model Training and Inference Kit
 A single-file header-only library for 8-bit quantized neural networks
 
 USAGE:
@@ -13,17 +26,18 @@ CONFIGURATION:
     #define QMTIK_H 128        // Hidden layer size  
     #define QMTIK_L 2          // Number of hidden layers
     #define QMTIK_O 10         // Output size
-    #define QMTIK_W_SCALE 0.01f // Weight quantization scale
-    #define QMTIK_A_SCALE 1.0f  // Activation quantization scale
+    #define QMTIK_W_SCALE 0.25f // Weight quantization scale
+    #define QMTIK_A_SCALE 0.02f  // Activation quantization scale
     
     // Training parameters
-    #define QMTIK_EPOCHS 10
+    #define QMTIK_EPOCHS 8
     #define QMTIK_BETA1 0.9f
     #define QMTIK_BETA2 0.999f
     #define QMTIK_EPS 1e-8f
     //Batching
-    #define QMTIK_DATASET_SIZE 56000
-    #define QMTIK_BATCH_SIZE 5
+    #define QMTIK_TRAINING_SAMPLES 56000
+    #define QMTIK_TESTING_SAMPLES 14000
+    #define QMTIK_BATCH_SIZE 32
     //LR
     #define QMTIK_INIT_ALPHA 0.001f
     // Choose LR Decay function (define one)
@@ -50,9 +64,10 @@ CONFIGURATION:
     // #define QMTIK_CROSS_ENTROPY_COST
 
     // Define debugging (optional)
-    #define QMTIK_EPOCHS_DEBUG_UPDATE_POINT 1
-    #define QMTIK_SAMPLE_NUMBER_DEBUG_UPDATE_POINT 1024
+    #define QMTIK_COLLECT_REPORT_DATA
     #define QMTIK_TRAIN_DEBUG
+    #define QMTIK_EPOCHS_DEBUG_UPDATE_POINT 1
+    #define QMTIK_SAMPLE_NUMBER_DEBUG_UPDATE_POINT 4096
     #define QMTIK_TEST_BEFORE_QUANT_DEBUG
     #define QMTIK_TEST_AFTER_QUANT_DEBUG
 
@@ -63,8 +78,8 @@ Training:
     #define QMTIK_H 256
     #define QMTIK_L 2
     #define QMTIK_O 10
-    #define QMTIK_W_SCALE 0.05f
-    #define QMTIK_A_SCALE 0.5f
+    #define QMTIK_A_SCALE 0.25f
+    #define QMTIK_W_SCALE 0.02f
     //===ACTIVATION, POST PROCESSING, COST FUNCTIONS===
     #define QMTIK_LEAKY_RELU_ACTV
     #define QMTIK_SOFT_MAX_PP
@@ -75,35 +90,34 @@ Training:
     #define QMTIK_BETA2 0.999f
     #define QMTIK_EPS 1e-8f
     //===================BATCHING======================
-    #define QMTIK_DATASET_SIZE 56000
-    #define QMTIK_BATCH_SIZE 5
+    #define QMTIK_TRAINING_SAMPLES 56000
+    #define QMTIK_TESTING_SAMPLES 14000
+    #define QMTIK_BATCH_SIZE 32
     //=================LR DECAY PARAMS=================
     #define QMTIK_INIT_ALPHA 0.001f
-    #define QMTIK_LR_STEP_DECAY
-    #define QMTIK_LR_DECAY_RATE 0.95f
-    #define QMTIK_LR_DECAY_STEPS 1000
+    #define QMTIK_LR_NO_DECAY
     //=====================DEBUG=======================
-    #define QMTIK_EPOCHS_DEBUG_UPDATE_POINT 1
-    #define QMTIK_SAMPLE_NUMBER_DEBUG_UPDATE_POINT 1024
-    #define QMTIK_TRAIN_DEBUG
+    #define QMTIK_COLLECT_REPORT_DATA
     //=================================================
+    #define QMTIK_IMPLEMENTATION
     #include "qmtik.h"
     
     int main() {
-        QMTIK_Network network;
-        QMTIK_init_weights(&network);
-        
-        FILE* train_file = fopen("train", "rb");
-        QMTIK_train(&network, train_file);
-        fclose(train_file);
-        
-        QMTIK_Model model;
-        QMTIK_quantize_to_model(&network, &model);
-        
-        FILE* model_file=fopen("model", "wb");
-        QMTIK_store_model(&model, model_file);
-        fclose(model_file);
+        QMTIK_Network network={0};
+        QMTIK_ReportData report_data={0};
 
+        FILE* train_file=fopen("mnist_784_train", "rb");
+        if (!train_file){perror("Failed to open model file"); return 1;}
+        FILE* test_file=fopen("mnist_784_test", "rb");
+        if (!test_file){perror("Failed to open model file"); return 1;}
+        FILE* q_model_file=fopen("mnist_784_model", "wb");
+        if (!q_model_file){perror("Failed to open model file"); return 1;}
+
+        QMTIK_make_model(&network, train_file, test_file, q_model_file, &report_data);
+        
+        fclose(q_model_file);
+        fclose(test_file);
+        fclose(train_file);
         return 0;
     }
 
@@ -113,29 +127,28 @@ Infering:
     #define QMTIK_H 256
     #define QMTIK_L 2
     #define QMTIK_O 10
-    #define QMTIK_W_SCALE 0.05f
-    #define QMTIK_A_SCALE 0.5f
+    #define QMTIK_W_SCALE 0.25f
+    #define QMTIK_A_SCALE 0.02f
     //===ACTIVATION, POST PROCESSING, COST FUNCTIONS===
     #define QMTIK_LEAKY_RELU_ACTV
     #define QMTIK_SOFT_MAX_PP
     #define QMTIK_CROSS_ENTROPY_COST
-    //=====================DEBUG=======================
-    #define QMTIK_EPOCHS_DEBUG_UPDATE_POINT 1
-    #define QMTIK_SAMPLE_NUMBER_DEBUG_UPDATE_POINT 1024
-    #define QMTIK_TEST_AFTER_QUANT_DEBUG
     //=================================================
+    #define QMTIK_IMPLEMENTATION
     #include "qmtik.h"
     
     int main() {
         QMTIK_QNetwork q_network={0};
 
         FILE* q_model_file=fopen("mnist_784_model", "rb");
-        QMTIK_load_model(&q_network, q_model_file);
+        if (!q_model_file){perror("Failed to open model file"); return 1;}
+        if (!QMTIK_load_model(&q_network, q_model_file)) {fclose(q_model_file); return 1;}
         fclose(q_model_file);
 
-        FILE* infer_file=fopen("mnist_784_infer", "rb");
-        printf("PERFORMANCE AFTER QUANT: %f\n", QMTIK_test_after_quant(&q_network, infer_file));
-        fclose(infer_file);
+        FILE* test_file=fopen("mnist_784_test", "rb");
+        if (!test_file){perror("Failed to open model file"); return 1;}
+        printf("PERFORMANCE: %f%%\n", QMTIK_test_after_quant(&q_network, test_file));
+        fclose(test_file);
 
         return 0;
     }
@@ -172,12 +185,14 @@ LICENSE:
     SOFTWARE.
 
 VERSION HISTORY:
+    3.0 (2025-09-26) Performance reports and simpler API
     2.0 (2025-09-20) LR Decay, Batching
     1.0 (2025-09-11) Initial release
 */
 
 #pragma once
-#define QMTIK_VERSION "2.0"
+#define QMTIK_VERSION "3.0"
+//==================================================
 //==================================================
 #include <stdio.h>
 #include <stdint.h>
@@ -185,6 +200,7 @@ VERSION HISTORY:
 #include <stdlib.h>
 #include <time.h>
 #include <string.h>
+#include <stdbool.h>
 //==================================================
 #define QMTIK_MainT float
 #define QMTIK_QWghtT int8_t
@@ -196,6 +212,7 @@ VERSION HISTORY:
 #define QMTIK_LEAK 0.01f
 #define QMTIK_CLAMP_MIN -88.0f
 #define QMTIK_CLAMP_MAX 88.0f
+#define QMTIK_REPORT_MAX_TEST_SAMPLES 100
 //==================================================
 typedef struct {QMTIK_MainT i_actv[QMTIK_I];} QMTIK_ILayer;
 typedef struct {QMTIK_MainT ih_z[QMTIK_H]; QMTIK_MainT ih_wght[QMTIK_H][QMTIK_I], ih_bias[QMTIK_H];} QMTIK_IHLayer;
@@ -224,26 +241,21 @@ typedef struct {QMTIK_QActvT q_ih_actv[QMTIK_H]; QMTIK_QWghtT q_ih_wght[QMTIK_H]
 typedef struct {QMTIK_QActvT q_hh_actv[QMTIK_H]; QMTIK_QWghtT q_hh_wght[QMTIK_H][QMTIK_H], q_hh_bias[QMTIK_H];} QMTIK_QHHLayer;
 typedef struct {QMTIK_QActvT q_o_z[QMTIK_O]; QMTIK_QWghtT q_o_wght[QMTIK_O][QMTIK_H], q_o_bias[QMTIK_O];} QMTIK_QOLayer;
 typedef struct {QMTIK_QILayer q_i_layer; QMTIK_QIHLayer q_ih_layer; QMTIK_QHHLayer q_hh_layers[QMTIK_L]; QMTIK_QOLayer q_o_layer;} QMTIK_QNetwork;
+typedef struct {QMTIK_MainT bq_accuracy, aq_accuracy; size_t model_size, train_memory, infer_memory; float train_time, bq_time, aq_time; QMTIK_MainT accuracy_vs_epoch[QMTIK_EPOCHS];} QMTIK_ReportData;
 //==================================================
 //==============USER VISIBLE FUNCTIONS==============
 //==================================================
-void QMTIK_init_weights(QMTIK_Network* network);
+void QMTIK_make_model(QMTIK_Network* network, FILE* train_file, FILE* test_file, FILE* q_model_file, QMTIK_ReportData* report_data);
 
-void QMTIK_train(QMTIK_Network* network, FILE* train_file);
+bool QMTIK_load_model(QMTIK_QNetwork* q_network, FILE* q_model_file);
 
-void QMTIK_quantize_to_model(QMTIK_Network* network, QMTIK_Model* model);
-void QMTIK_store_model(QMTIK_Model* model, FILE* q_model_file);
-uint8_t QMTIK_load_model(QMTIK_QNetwork* q_network, FILE* q_model_file);
-
-void QMTIK_infer_forward(QMTIK_QNetwork* q_network);
-
-QMTIK_MainT QMTIK_test_before_quant(QMTIK_Network* network, FILE* test_file);
 QMTIK_MainT QMTIK_test_after_quant(QMTIK_QNetwork* q_network, FILE* test_file);
 
 void QMTIK_load_network_input(QMTIK_QNetwork* q_network, QMTIK_QActvT input[QMTIK_I]);
+void QMTIK_infer_forward(QMTIK_QNetwork* q_network);
 void QMTIK_get_network_output(QMTIK_QNetwork* q_network, QMTIK_QActvT output[QMTIK_O]);
 
-size_t QMTIK_get_network_memory_usage(void);
+size_t QMTIK_get_training_memory_usage(void);
 size_t QMTIK_get_model_memory_usage(void);
 size_t QMTIK_get_inference_memory_usage(void);
 //==================================================
@@ -261,10 +273,15 @@ static inline QMTIK_MainT QMTIK_fake_quantize_w(QMTIK_MainT x);
 static inline QMTIK_QActvT QMTIK_quantize_a(QMTIK_MainT x);
 static inline QMTIK_MainT QMTIK_fake_quantize_a(QMTIK_MainT x);
 //==================================================
-static inline uint8_t QMTIK_load_sample_pair(FILE* file, QMTIK_SamplePair* pair);
+static inline void QMTIK_init_weights(QMTIK_Network* network);
+static inline bool QMTIK_load_sample_pair(FILE* file, QMTIK_SamplePair* pair);
 static inline void QMTIK_train_forward(QMTIK_Network* network);
 static inline void QMTIK_batch_accumulate_gradients(QMTIK_Network* network, QMTIK_SamplePair sample_pair);
 static inline void QMTIK_batch_apply_gradients(QMTIK_Network* network);
+static inline void QMTIK_train(QMTIK_Network* network, FILE* train_file, QMTIK_ReportData* report_data);
+static inline QMTIK_MainT QMTIK_test_before_quant(QMTIK_Network* network, FILE* test_file, bool full);
+static inline void QMTIK_quantize_to_model(QMTIK_Network* network, QMTIK_Model* model);
+static inline void QMTIK_store_model(QMTIK_Model* model, FILE* q_model_file);
 //==================================================
 #ifdef QMTIK_IMPLEMENTATION
 //==================================================
@@ -333,14 +350,14 @@ static inline void QMTIK_batch_apply_gradients(QMTIK_Network* network);
         for(size_t i=1; i<QMTIK_O; ++i) if (output[i]>output[pred_class]) pred_class=i;
         int32_t exp_class=0;
         for(size_t i=1; i<QMTIK_O; ++i) if(expected[i]>expected[exp_class]) exp_class=i;
-        return (pred_class==exp_class)?1:0;
+        return (pred_class==exp_class)?0:1;
     }
     static inline QMTIK_MainT QMTIK_infer_cost(QMTIK_QActvT output[QMTIK_O], QMTIK_QActvT expected[QMTIK_O]){
         int32_t pred_class=0;
         for(size_t i=1; i<QMTIK_O; ++i) if(output[i]>output[pred_class]) pred_class=i;
         int32_t exp_class=0;
         for(size_t i=1; i<QMTIK_O; ++i) if(expected[i]>expected[exp_class]) exp_class=i;
-        return (pred_class==exp_class)?1:0;
+        return (pred_class==exp_class)?0:1;
     }
 #endif
 //==================================================
@@ -365,13 +382,13 @@ static inline void QMTIK_update_alpha(QMTIK_MainT* current_alpha, size_t* step_c
 #ifdef QMTIK_LR_COSINE_DECAY
 static inline void QMTIK_update_alpha(QMTIK_MainT* current_alpha, size_t* step_count) {
     *step_count+=1;
-    size_t total_steps=QMTIK_EPOCHS*(QMTIK_DATASET_SIZE/QMTIK_BATCH_SIZE);
+    size_t total_steps=QMTIK_EPOCHS*(QMTIK_TRAINING_SAMPLES/QMTIK_BATCH_SIZE);
     QMTIK_MainT progress=fminf(1.0f, (QMTIK_MainT)(*step_count)/total_steps);
     *current_alpha=QMTIK_INIT_ALPHA*(1.0f+cosf(3.14159f*progress))/2.0f;
 }
 #endif
 //==================================================
-static inline uint8_t QMTIK_load_sample_pair(FILE* file, QMTIK_SamplePair* pair) {
+static inline bool QMTIK_load_sample_pair(FILE* file, QMTIK_SamplePair* pair) {
     size_t r1=fread(pair->input, 1, QMTIK_I, file);
     size_t r2=fread(pair->output, 1, QMTIK_O, file);
     return (r1==QMTIK_I&&r2==QMTIK_O);
@@ -408,31 +425,27 @@ static inline void QMTIK_train_forward(QMTIK_Network* network) {
     }
     QMTIK_train_post_process(network->o_layer.o_z);
 }
-void QMTIK_infer_forward(QMTIK_QNetwork* q_network) {
-    QMTIK_MainT acc;
+//==================================================
+static inline void QMTIK_init_weights(QMTIK_Network* network){
+    srand(time(NULL));
     for (size_t i=0; i<QMTIK_H; ++i){
-        acc=q_network->q_ih_layer.q_ih_bias[i]*QMTIK_W_SCALE;
-        for (size_t j=0; j<QMTIK_I; ++j) acc+=(q_network->q_ih_layer.q_ih_wght[i][j]*QMTIK_W_SCALE)*(q_network->q_i_layer.q_i_actv[j]*QMTIK_A_SCALE);
-        q_network->q_ih_layer.q_ih_actv[i]=QMTIK_infer_activation(acc);
+        network->ih_layer.ih_bias[i]=0.0f;
+        for (size_t j=0; j<QMTIK_I; ++j) network->ih_layer.ih_wght[i][j]=sqrtf(2.0f/(QMTIK_I+QMTIK_H))*((QMTIK_MainT)rand()/RAND_MAX-0.5f)*2.0f;
     }
-    for (size_t i=0; i<QMTIK_H; ++i){
-        acc=q_network->q_hh_layers[0].q_hh_bias[i]*QMTIK_W_SCALE;
-        for (size_t j=0; j<QMTIK_H; ++j) acc+=(q_network->q_hh_layers[0].q_hh_wght[i][j]*QMTIK_W_SCALE)*(q_network->q_ih_layer.q_ih_actv[j]*QMTIK_A_SCALE);
-        q_network->q_hh_layers[0].q_hh_actv[i]=QMTIK_infer_activation(acc);
-    }
-    for (size_t l=1; l<QMTIK_L; ++l){
-        for (size_t i=0; i<QMTIK_H; ++i){
-            acc=q_network->q_hh_layers[l].q_hh_bias[i]*QMTIK_W_SCALE;
-            for (size_t j=0; j<QMTIK_H; ++j) acc+=(q_network->q_hh_layers[l].q_hh_wght[i][j]*QMTIK_W_SCALE)*(q_network->q_hh_layers[l-1].q_hh_actv[j]*QMTIK_A_SCALE);
-            q_network->q_hh_layers[l].q_hh_actv[i]=QMTIK_infer_activation(acc);
+    for (size_t l=0; l<QMTIK_L; ++l){
+        for (size_t i=0; i<QMTIK_H; ++i) {
+            network->hh_layers[l].hh_bias[i]=0.0f;
+            for (size_t j=0; j<QMTIK_H; ++j) network->hh_layers[l].hh_wght[i][j]=sqrtf(2.0f/(QMTIK_H+QMTIK_H))*((QMTIK_MainT)rand()/RAND_MAX-0.5f)*2.0f;
         }
     }
     for (size_t i=0; i<QMTIK_O; ++i){
-        acc=q_network->q_o_layer.q_o_bias[i]*QMTIK_W_SCALE;
-        for (size_t j=0; j<QMTIK_H; ++j) acc+=(q_network->q_o_layer.q_o_wght[i][j]*QMTIK_W_SCALE)*(q_network->q_hh_layers[QMTIK_L-1].q_hh_actv[j]*QMTIK_A_SCALE);
-        q_network->q_o_layer.q_o_z[i]=(QMTIK_QActvT)fmaxf(QMTIK_QActvT_MIN, fminf(QMTIK_QActvT_MAX, roundf(acc/QMTIK_A_SCALE)));
+        network->o_layer.o_bias[i]=0.0f;
+        for (size_t j=0; j<QMTIK_H; ++j) network->o_layer.o_wght[i][j]=sqrtf(2.0f/(QMTIK_H+QMTIK_O))*((QMTIK_MainT)rand()/RAND_MAX-0.5f)*2.0f;
     }
-    QMTIK_infer_post_process(q_network->q_o_layer.q_o_z);
+    memset(&network->adam_state, 0, sizeof(QMTIK_AdamState));
+    network->adam_state.current_alpha=QMTIK_INIT_ALPHA;
+    network->adam_state.b1t=1.0f;
+    network->adam_state.b2t=1.0f;
 }
 //==================================================
 static inline void QMTIK_batch_accumulate_gradients(QMTIK_Network* network, QMTIK_SamplePair sample_pair) {
@@ -528,8 +541,7 @@ static inline void QMTIK_batch_apply_gradients(QMTIK_Network* network) {
     memset(network->adam_state.acc_o_b, 0, sizeof(network->adam_state.acc_o_b));
     network->adam_state.batch_count = 0;
 }
-
-void QMTIK_train(QMTIK_Network* network, FILE* train_file){
+static inline void QMTIK_train(QMTIK_Network* network, FILE* train_file, QMTIK_ReportData* report_data){
     QMTIK_SamplePair sample;
     uint8_t load_pair_failed=0;
     int _sample_number=0;
@@ -559,14 +571,44 @@ void QMTIK_train(QMTIK_Network* network, FILE* train_file){
             }
             QMTIK_batch_apply_gradients(network);
         }
+        #ifdef QMTIK_COLLECT_REPORT_DATA
+            report_data->accuracy_vs_epoch[_epoch]=QMTIK_test_before_quant(network, train_file, false);
+        #endif
     }
     #ifdef QMTIK_TRAIN_DEBUG
         printf("[QMTIK] ====TRAINING COMPLETE====\n");
         printf("[QMTIK] Total samples processed: %d\n", _sample_number);
     #endif
 }
-//==================================================
-void QMTIK_quantize_to_model(QMTIK_Network* network, QMTIK_Model* model){
+static inline QMTIK_MainT QMTIK_test_before_quant(QMTIK_Network* network, FILE* test_file, bool full){
+    QMTIK_SamplePair pair;
+    QMTIK_MainT total_cost=0;
+    size_t _sample_number=0;
+    rewind(test_file);
+    #ifdef QMTIK_TEST_BEFORE_QUANT_DEBUG
+        printf("[QMTIK] ====TEST BEFORE QUANT====\n");
+    #endif
+    while (1){
+        if (!QMTIK_load_sample_pair(test_file, &pair)) break;
+        for(size_t i=0; i<QMTIK_I; ++i) network->i_layer.i_actv[i]=(QMTIK_MainT)pair.input[i];
+        QMTIK_train_forward(network);
+        int32_t temp_cost=QMTIK_train_cost(network->o_layer.o_z, pair.output);
+        #ifdef QMTIK_TEST_BEFORE_QUANT_DEBUG
+            if (_sample_number%(QMTIK_SAMPLE_NUMBER_DEBUG_UPDATE_POINT)==0) {
+                printf("[QMTIK] SAMPLE_NUMBER: %zu\n[QMTIK] OUTPUT:   ", _sample_number);
+                for(size_t i=0; i<QMTIK_O; ++i) printf("%f,", network->o_layer.o_z[i]);
+                printf("\n[QMTIK] EXPECTED: ");
+                for(size_t i=0; i<QMTIK_O; ++i) printf("%d,", pair.output[i]);
+                printf("\n[QMTIK] COST: %d\n", temp_cost);
+            }
+        #endif
+        _sample_number+=1;
+        total_cost+=temp_cost;
+        if (!full && _sample_number>QMTIK_REPORT_MAX_TEST_SAMPLES) break;
+    }
+    return (1-total_cost/_sample_number)*100;
+}
+static inline void QMTIK_quantize_to_model(QMTIK_Network* network, QMTIK_Model* model){
     for (size_t i=0; i<QMTIK_H; ++i){
         model->q_ih_bias[i]=QMTIK_quantize_w(network->ih_layer.ih_bias[i]);
         for (size_t j=0; j<QMTIK_I; ++j) model->q_ih_wght[i][j]=QMTIK_quantize_w(network->ih_layer.ih_wght[i][j]);
@@ -582,10 +624,53 @@ void QMTIK_quantize_to_model(QMTIK_Network* network, QMTIK_Model* model){
         for (size_t j=0; j<QMTIK_H; ++j) model->q_o_wght[i][j]=QMTIK_quantize_w(network->o_layer.o_wght[i][j]);
     }
 }
-void QMTIK_store_model(QMTIK_Model* model, FILE* q_model_file){fwrite(model, sizeof(QMTIK_Model), 1, q_model_file);}
-uint8_t QMTIK_load_model(QMTIK_QNetwork* q_network, FILE* q_model_file) {
+static inline void QMTIK_store_model(QMTIK_Model* model, FILE* q_model_file){fwrite(model, sizeof(QMTIK_Model), 1, q_model_file);}
+//==================================================
+void QMTIK_make_model(QMTIK_Network* network, FILE* train_file, FILE* test_file, FILE* q_model_file, QMTIK_ReportData* report_data){
+    clock_t c1, c2;
+    QMTIK_Model model={0};
+    QMTIK_init_weights(network);
+    c1=clock();
+    QMTIK_train(network, train_file, report_data);
+    c2=clock();
+    #ifdef QMTIK_COLLECT_REPORT_DATA
+        report_data->train_time=(((float)c2-(float)c1)/CLOCKS_PER_SEC);
+        c1=clock();
+        report_data->bq_accuracy=QMTIK_test_before_quant(network, test_file, true);
+        c2=clock();
+        report_data->bq_time=(((float)c2-(float)c1)/CLOCKS_PER_SEC)/QMTIK_TESTING_SAMPLES;
+    #endif
+    QMTIK_quantize_to_model(network, &model);
+    QMTIK_store_model(&model, q_model_file);
+    #ifdef QMTIK_COLLECT_REPORT_DATA
+        QMTIK_QNetwork q_network={0};
+        for (size_t i=0; i<QMTIK_H; ++i){
+            q_network.q_ih_layer.q_ih_bias[i]=model.q_ih_bias[i];
+            for (size_t j=0; j<QMTIK_I; ++j) q_network.q_ih_layer.q_ih_wght[i][j]=model.q_ih_wght[i][j];
+        }
+        for (size_t l=0; l<QMTIK_L; ++l){
+            for (size_t i=0; i<QMTIK_H; ++i){
+                q_network.q_hh_layers[l].q_hh_bias[i]=model.q_hh_biases[l][i];
+                for (size_t j=0; j<QMTIK_H; ++j) q_network.q_hh_layers[l].q_hh_wght[i][j]=model.q_hh_wghts[l][i][j];
+            }
+        }
+        for(size_t i=0; i<QMTIK_O; ++i){
+            q_network.q_o_layer.q_o_bias[i]=model.q_o_bias[i];
+            for(size_t j=0; j<QMTIK_H; ++j) q_network.q_o_layer.q_o_wght[i][j]=model.q_o_wght[i][j];
+        }
+        c1=clock();
+        report_data->aq_accuracy=QMTIK_test_after_quant(&q_network, test_file);
+        c2=clock();
+        report_data->aq_time=(((float)c2-(float)c1)/CLOCKS_PER_SEC)/QMTIK_TESTING_SAMPLES;
+        report_data->model_size=QMTIK_get_model_memory_usage();
+        report_data->train_memory=QMTIK_get_training_memory_usage();
+        report_data->infer_memory=QMTIK_get_inference_memory_usage();
+    #endif
+}
+//==================================================
+bool QMTIK_load_model(QMTIK_QNetwork* q_network, FILE* q_model_file) {
     QMTIK_Model model;
-    if (!fread(&model, sizeof(QMTIK_Model), 1, q_model_file)){perror("[QMTIK] Failed to read model file"); return 1;}
+    if (!fread(&model, sizeof(QMTIK_Model), 1, q_model_file)){perror("[QMTIK] Failed to read model file"); return false;}
     for (size_t i=0; i<QMTIK_H; ++i){
         q_network->q_ih_layer.q_ih_bias[i]=model.q_ih_bias[i];
         for (size_t j=0; j<QMTIK_I; ++j) q_network->q_ih_layer.q_ih_wght[i][j]=model.q_ih_wght[i][j];
@@ -600,66 +685,44 @@ uint8_t QMTIK_load_model(QMTIK_QNetwork* q_network, FILE* q_model_file) {
         q_network->q_o_layer.q_o_bias[i]=model.q_o_bias[i];
         for(size_t j=0; j<QMTIK_H; ++j) q_network->q_o_layer.q_o_wght[i][j]=model.q_o_wght[i][j];
     }
-    return 0;
-}
-//==================================================
-void QMTIK_init_weights(QMTIK_Network* network){
-    srand(time(NULL));
-    for (size_t i=0; i<QMTIK_H; ++i){
-        network->ih_layer.ih_bias[i]=0.0f;
-        for (size_t j=0; j<QMTIK_I; ++j) network->ih_layer.ih_wght[i][j]=sqrtf(2.0f/(QMTIK_I+QMTIK_H))*((QMTIK_MainT)rand()/RAND_MAX-0.5f)*2.0f;
-    }
-    for (size_t l=0; l<QMTIK_L; ++l){
-        for (size_t i=0; i<QMTIK_H; ++i) {
-            network->hh_layers[l].hh_bias[i]=0.0f;
-            for (size_t j=0; j<QMTIK_H; ++j) network->hh_layers[l].hh_wght[i][j]=sqrtf(2.0f/(QMTIK_H+QMTIK_H))*((QMTIK_MainT)rand()/RAND_MAX-0.5f)*2.0f;
-        }
-    }
-    for (size_t i=0; i<QMTIK_O; ++i){
-        network->o_layer.o_bias[i]=0.0f;
-        for (size_t j=0; j<QMTIK_H; ++j) network->o_layer.o_wght[i][j]=sqrtf(2.0f/(QMTIK_H+QMTIK_O))*((QMTIK_MainT)rand()/RAND_MAX-0.5f)*2.0f;
-    }
-    memset(&network->adam_state, 0, sizeof(QMTIK_AdamState));
-    network->adam_state.current_alpha=QMTIK_INIT_ALPHA;
-    network->adam_state.b1t=1.0f;
-    network->adam_state.b2t=1.0f;
+    return true;
 }
 //==================================================
 void QMTIK_load_network_input(QMTIK_QNetwork* q_network, QMTIK_QActvT input[QMTIK_I]) {for(size_t i=0; i<QMTIK_I; ++i) q_network->q_i_layer.q_i_actv[i]=input[i];}
+//==================================================
+void QMTIK_infer_forward(QMTIK_QNetwork* q_network) {
+    QMTIK_MainT acc;
+    for (size_t i=0; i<QMTIK_H; ++i){
+        acc=q_network->q_ih_layer.q_ih_bias[i]*QMTIK_W_SCALE;
+        for (size_t j=0; j<QMTIK_I; ++j) acc+=(q_network->q_ih_layer.q_ih_wght[i][j]*QMTIK_W_SCALE)*(q_network->q_i_layer.q_i_actv[j]*QMTIK_A_SCALE);
+        q_network->q_ih_layer.q_ih_actv[i]=QMTIK_infer_activation(acc);
+    }
+    for (size_t i=0; i<QMTIK_H; ++i){
+        acc=q_network->q_hh_layers[0].q_hh_bias[i]*QMTIK_W_SCALE;
+        for (size_t j=0; j<QMTIK_H; ++j) acc+=(q_network->q_hh_layers[0].q_hh_wght[i][j]*QMTIK_W_SCALE)*(q_network->q_ih_layer.q_ih_actv[j]*QMTIK_A_SCALE);
+        q_network->q_hh_layers[0].q_hh_actv[i]=QMTIK_infer_activation(acc);
+    }
+    for (size_t l=1; l<QMTIK_L; ++l){
+        for (size_t i=0; i<QMTIK_H; ++i){
+            acc=q_network->q_hh_layers[l].q_hh_bias[i]*QMTIK_W_SCALE;
+            for (size_t j=0; j<QMTIK_H; ++j) acc+=(q_network->q_hh_layers[l].q_hh_wght[i][j]*QMTIK_W_SCALE)*(q_network->q_hh_layers[l-1].q_hh_actv[j]*QMTIK_A_SCALE);
+            q_network->q_hh_layers[l].q_hh_actv[i]=QMTIK_infer_activation(acc);
+        }
+    }
+    for (size_t i=0; i<QMTIK_O; ++i){
+        acc=q_network->q_o_layer.q_o_bias[i]*QMTIK_W_SCALE;
+        for (size_t j=0; j<QMTIK_H; ++j) acc+=(q_network->q_o_layer.q_o_wght[i][j]*QMTIK_W_SCALE)*(q_network->q_hh_layers[QMTIK_L-1].q_hh_actv[j]*QMTIK_A_SCALE);
+        q_network->q_o_layer.q_o_z[i]=(QMTIK_QActvT)fmaxf(QMTIK_QActvT_MIN, fminf(QMTIK_QActvT_MAX, roundf(acc/QMTIK_A_SCALE)));
+    }
+    QMTIK_infer_post_process(q_network->q_o_layer.q_o_z);
+}
+//==================================================
 void QMTIK_get_network_output(QMTIK_QNetwork* q_network, QMTIK_QActvT output[QMTIK_O]) {for(size_t i=0; i<QMTIK_O; ++i) output[i]=q_network->q_o_layer.q_o_z[i];}
 //==================================================
-QMTIK_MainT QMTIK_test_before_quant(QMTIK_Network* network, FILE* test_file){
-    QMTIK_SamplePair pair;
-    uint64_t total_cost=0;
-    int _sample_number=0;
-    rewind(test_file);
-    #ifdef QMTIK_TEST_BEFORE_QUANT_DEBUG
-        printf("[QMTIK] ====TEST BEFORE QUANT====\n");
-    #endif
-    while (1){
-        if (!QMTIK_load_sample_pair(test_file, &pair)) break;
-        for(size_t i=0; i<QMTIK_I; ++i) network->i_layer.i_actv[i]=(QMTIK_MainT)pair.input[i];
-        QMTIK_train_forward(network);
-        int32_t temp_cost=QMTIK_train_cost(network->o_layer.o_z, pair.output);
-        #ifdef QMTIK_TEST_BEFORE_QUANT_DEBUG
-            if (_sample_number%(QMTIK_SAMPLE_NUMBER_DEBUG_UPDATE_POINT)==0) {
-                printf("[QMTIK] SAMPLE_NUMBER: %d\n", _sample_number);
-                printf("[QMTIK] OUTPUT: ");
-                for(size_t i=0; i<QMTIK_O; ++i) printf("%f,", network->o_layer.o_z[i]);
-                printf("\n[QMTIK] EXPECTED: ");
-                for(size_t i=0; i<QMTIK_O; ++i) printf("%d,", pair.output[i]);
-                printf("\n[QMTIK] COST: %d\n", temp_cost);
-            }
-        #endif
-        _sample_number+=1;
-        total_cost+=temp_cost;
-    }
-    return (QMTIK_MainT)total_cost/_sample_number;
-}
 QMTIK_MainT QMTIK_test_after_quant(QMTIK_QNetwork* q_network, FILE* test_file){
     QMTIK_SamplePair pair;
-    uint64_t total_cost=0;
-    int _sample_number=0;
+    QMTIK_MainT total_cost=0;
+    size_t _sample_number=0;
     rewind(test_file);
     #ifdef QMTIK_TEST_AFTER_QUANT_DEBUG
         printf("[QMTIK] ====TEST AFTER QUANT====\n");
@@ -671,8 +734,7 @@ QMTIK_MainT QMTIK_test_after_quant(QMTIK_QNetwork* q_network, FILE* test_file){
         int32_t temp_cost=QMTIK_infer_cost(q_network->q_o_layer.q_o_z, pair.output);
         #ifdef QMTIK_TEST_AFTER_QUANT_DEBUG
             if (_sample_number%(QMTIK_SAMPLE_NUMBER_DEBUG_UPDATE_POINT)==0) {
-                printf("[QMTIK] SAMPLE_NUMBER: %d\n", _sample_number);
-                printf("[QMTIK] OUTPUT: ");
+                printf("[QMTIK] SAMPLE_NUMBER: %zu\n[QMTIK] OUTPUT:   ", _sample_number);
                 for(size_t i=0; i<QMTIK_O; ++i) printf("%d,", q_network->q_o_layer.q_o_z[i]);
                 printf("\n[QMTIK] EXPECTED: ");
                 for(size_t i=0; i<QMTIK_O; ++i) printf("%d,", pair.output[i]);
@@ -682,10 +744,10 @@ QMTIK_MainT QMTIK_test_after_quant(QMTIK_QNetwork* q_network, FILE* test_file){
         _sample_number+=1;
         total_cost+=temp_cost;
     }
-    return (QMTIK_MainT)total_cost/_sample_number;
+    return (1-total_cost/_sample_number)*100;
 }
 //==================================================
-size_t QMTIK_get_network_memory_usage(void) {return sizeof(QMTIK_Network);}
+size_t QMTIK_get_training_memory_usage(void) {return sizeof(QMTIK_Network);}
 size_t QMTIK_get_model_memory_usage(void) {return sizeof(QMTIK_Model);}
 size_t QMTIK_get_inference_memory_usage(void) {return sizeof(QMTIK_QNetwork);}
 //==================================================
