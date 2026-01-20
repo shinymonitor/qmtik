@@ -4,12 +4,12 @@
 </div>
 
 QMTIK (Quantized Model Training and Inference Kit) minimal, dependency-free, allocation-agnostic stb-style library for quantized neural networks designed for embedded systems and resource constrained environments. 
-It uses uint8_t quantization for weights and activations to achieve 4x smaller model size, 4-16x faster inference, and minimal, if not none, accuracy loss.
+It uses int8_t quantization for weights and activations to achieve 4x smaller model size, 4-16x faster inference, and minimal, if not none, accuracy loss.
 
 On the MNIST 784 dataset, QMTIK achieves ~95% test accuracy with a model that is just ~300KB and runs inference in ~0.5ms per sample on a modern CPU.
 
 ## Features
-- uint8_t weights and activations for small memory usage and model size
+- int8_t weights and activations for small memory usage and model size
 - Adam optimization with batching
 - Quantization-Aware Training to minimize accuracy loss
 - Easy to modify network structure
