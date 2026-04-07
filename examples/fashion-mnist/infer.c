@@ -1,17 +1,17 @@
-//infer.c
 #include "qmtik_config.h"
-#define QMTIK_IMPLEMENTATION
-#include "qmtik.h"
+#include "../../qmtik.h"
 
 int main() {
-    QMTIK_QNetwork q_network={0};
+    QMTIK_Q_Network q_network={0};
     FILE* q_model_file=fopen("fashion-mnist_model", "rb");
     if (!q_model_file){perror("Failed to open model file"); return 1;}
-    if (!QMTIK_load_model(&q_network, q_model_file)) {fclose(q_model_file); return 1;}
+    if (!QMTIK_Q_load_model_from_file(q_model_file, &q_network)) {fclose(q_model_file); return 1;}
     fclose(q_model_file);
+
     FILE* test_file=fopen("fashion-mnist_test", "rb");
     if (!test_file){perror("Failed to open model file"); return 1;}
-    printf("PERFORMANCE: %f%%\n", QMTIK_test_after_quant(&q_network, test_file));
+    printf("ACCURACY: %f%%\n", (1 - QMTIK_Q_test_from_Q_samples_file(&q_network, test_file)) * 100);
     fclose(test_file);
+
     return 0;
 }
