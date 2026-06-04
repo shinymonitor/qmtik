@@ -1,4 +1,5 @@
 #include "qmtik_config.h"
+#define QMTIK_IMPLEMENTATION
 #include "../../qmtik.h"
 
 int main() {

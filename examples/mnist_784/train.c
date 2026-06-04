@@ -1,4 +1,5 @@
 #include "qmtik_config.h"
+#define QMTIK_IMPLEMENTATION
 #define QMTIK_ENABLE_TRAINING
 #include "../../qmtik.h"
 
